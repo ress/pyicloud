@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import logging
@@ -420,10 +421,25 @@ class PhotoAsset(object):
 
         self._versions = None
 
+    DATA_CLASS_TYPE = {
+        0: u"unknown",
+        1: u"image",
+        2: u"video",
+        3: u"audio"
+    }
+
+    FILE_EXTENSION_LOOKUP = {
+        u"public.jpeg": u"jpg",
+        u"public.heic": u"HEIC",
+        u"com.apple.quicktime-movie": u"mov",
+        u"public.mpeg-4": u"mp4"
+    }
+
     PHOTO_VERSION_LOOKUP = {
         u"original": u"resOriginal",
         u"medium": u"resJPEGMed",
-        u"thumb": u"resJPEGThumb"
+        u"thumb": u"resJPEGThumb",
+        u"live": u"resOriginalVidCompl"
     }
 
     VIDEO_VERSION_LOOKUP = {
@@ -470,10 +486,17 @@ class PhotoAsset(object):
                 self._master_record['fields']['resOriginalHeight']['value'])
 
     @property
+    def data_class_type(self):
+        data_class_type = self._master_record['fields']['dataClassType']['value']
+        return self.DATA_CLASS_TYPE[data_class_type]
+
+    @property
     def versions(self):
         if not self._versions:
             self._versions = {}
-            if 'resVidSmallRes' in self._master_record['fields']:
+            if self.data_class_type == "image":
+                typed_version_lookup = self.PHOTO_VERSION_LOOKUP
+            elif self.data_class_type == "video":
                 typed_version_lookup = self.VIDEO_VERSION_LOOKUP
             else:
                 typed_version_lookup = self.PHOTO_VERSION_LOOKUP
@@ -487,9 +510,13 @@ class PhotoAsset(object):
                         'size': f['%sRes' % prefix]['value']['size'],
                         'type': f['%sFileType' % prefix]['value'],
                         'url': f['%sRes' % prefix]['value']['downloadURL'],
-                        'filename': self.filename,
+                        'filename': self.get_filename(f['%sFileType' % prefix]['value']),
                     }
         return self._versions
+
+    def get_filename(self, file_type):
+        filename, file_extension = os.path.splitext(self.filename)
+        return '%s.%s' % (filename, self.FILE_EXTENSION_LOOKUP[file_type])
 
     def download(self, version='original', **kwargs):
         if version not in self.versions:
